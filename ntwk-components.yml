@@ -1,0 +1,139 @@
+---
+# create UCS VLANs, vNIC templates, and LAN conn pol
+
+- hosts: ucs.vm.jm
+  connection: local
+  gather_facts: no
+  vars:
+    vlans:
+      - name: core_10
+        id: '10'
+      - name: core_20
+        id: '20'
+      - name: core_30
+        id: '30'
+      - name: dmz_40
+        id: '40'
+      - name: dmz_50
+        id: '50'
+      - name: dmz_60
+        id: '60'
+
+    vnic_templates:
+      # primary
+      - name: core_10_eth0
+        fabric: A
+        redundancy_type: primary
+        peer: core_10_eth1
+        mtu: "1500"
+        org_dn: "org-root/org-linux/org-linux-core"
+        vlans_list:
+        - name: core_10
+          native: "yes"
+      # secondary
+      - name: core_10_eth1
+        fabric: B
+        redundancy_type: secondary
+        peer: core_10_eth0
+        org_dn: "org-root/org-linux/org-linux-core"
+        vlans_list:
+        - name: core_10
+          native: "yes"
+
+      # primary
+      - name: dmz_data_eth0
+        fabric: A
+        redundancy_type: primary
+        peer: dmz_data_eth1
+        mtu: "1500"
+        org_dn: "org-root/org-windows/org-windows-dmz"
+        vlans_list:
+        - name: dmz_40
+          native: "yes"
+        - name: dmz_50
+          native: "no"
+        - name: dmz_60
+          native: "no"
+      # secondary
+      - name: dmz_data_eth1
+        fabric: B
+        redundancy_type: secondary
+        peer: dmz_data_eth0
+        org_dn: "org-root/org-windows/org-windows-dmz"
+        vlans_list:
+        - name: dmz_40
+          native: "yes"
+        - name: dmz_50
+          native: "no"
+        - name: dmz_60
+          native: "no"
+
+    lan_conn_pol:
+      - name: core_10
+        org_dn: "org-root/org-linux/org-linux-core"
+        vnic_list:
+        - name: core_10_eth0
+          vnic_template: core_10_eth0
+          adapter_policy: Linux
+        - name: core_10_eth1
+          vnic_template: core_10_eth1
+          adapter_policy: Linux
+      - name: dmz_data
+        org_dn: "org-root/org-windows/org-windows-dmz"
+        vnic_list:
+        - name: dmz_data_eth0
+          vnic_template: dmz_data_eth0
+          adapter_policy: Windows
+        - name: dmz_data_eth1
+          vnic_template: dmz_data_eth1
+          adapter_policy: Windows
+
+  tasks:
+    - name: Add VLANs
+      ucs_vlans:
+        hostname: "{{ ansible_host }}"
+        username: "{{ ansible_user }}"
+        password: "{{ ansible_password }}"
+
+        fabric: common
+        sharing: none
+        name: "{{ item.name }}"
+        id: "{{ item.id }}"
+        native: "no"
+        state: present
+      loop: "{{ vlans }}"
+
+    - name: Create vNIC templates
+      ucs_vnic_template:
+        hostname: "{{ ansible_host }}"
+        username: "{{ ansible_user }}"
+        password: "{{ ansible_password }}"
+
+        # setting some default values because secondary
+        # templates don't use those fields
+        name: "{{ item.name }}"
+        description: Created by Ansible
+        fabric: "{{ item.fabric }}"
+        vlans_list: "{{ item.vlans_list }}"
+        org_dn: "{{ item.org_dn }}"
+        template_type: updating-template
+        mtu: "{{ item.mtu | default('') }}"
+        mac_pool: mac_pool
+        pin_group: "{{ item.pin_group | default('') }}"
+        peer_redundancy_template: "{{ item.peer }}"
+        redundancy_type: "{{ item.redundancy_type }}"
+        state: present
+      loop: "{{ vnic_templates }}"
+
+    - name: Create LAN conn pol
+      ucs_lan_connectivity:
+        hostname: "{{ ansible_host }}"
+        username: "{{ ansible_user }}"
+        password: "{{ ansible_password }}"
+
+        name: "{{ item.name }}"
+        description: Created by Ansible
+        org_dn: "{{ item.org_dn }}"
+        vnic_list: "{{ item.vnic_list }}"
+        state: present
+      loop: "{{ lan_conn_pol }}"

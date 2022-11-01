@@ -1,0 +1,10 @@
+---
+# This playbook will import two playbooks to create UCS
+# orgs, VLANs, vNIC templates, and LAN connecvity
+# policies
+
+- name: Create UCS orgs
+  import_playbook: orgs.yml
+
+- name: Create Networking objects
+  import_playbook: ntwk-components.yml

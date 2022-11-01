@@ -1,0 +1,7 @@
+all:
+  children:
+    ucs:
+      hosts:
+        ucs.vm.jm:
+          ansible_user: ucspe
+          ansible_password: ucspe
